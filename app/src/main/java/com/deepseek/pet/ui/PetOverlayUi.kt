@@ -55,7 +55,9 @@ import com.deepseek.pet.ui.theme.HyperTextSecondary
 /**
  * 桌面上的 DeepSeek娘 —— 全身立绘，不做圆形裁切（要的就是"只有人物"）。
  *
- * [mood] 只决定脚下的光晕颜色（余额状态），[sprite] 决定待机/点击哪张立绘。
+ * [sprite] 决定待机/点击哪张立绘；[mood] 只驱动**文字类**强调色（卡片数字、
+ * 通知文案），**不再往人物身上画任何色块** —— 之前脚底有一圈 mood 光晕，
+ * 会从裙摆和两腿的缝隙里透出来，看着就是一块漂浮的异常色块。
  */
 @Composable
 fun PetBubble(
@@ -70,29 +72,6 @@ fun PetBubble(
         modifier = modifier.height(height),
         contentAlignment = Alignment.BottomCenter
     ) {
-        // 脚下的状态光晕：余额变了颜色跟着变，替代表情切换。
-        //
-        // 半径必须显式写成"圆的半径"——radialGradient 不指定 radius 时按盒子尺寸铺，
-        // 渐变还没退到透明就被裁断，边缘出现一道硬边，在浅色底上看着就是一块
-        // 实心色块（余额充足时是绿色，用户反馈的"中间偏下绿块"就是它）。
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = height * 0.02f)
-                .size(height * 0.42f)
-                .drawBehind {
-                    val r = size.minDimension / 2f
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(accent.copy(alpha = 0.55f), Color.Transparent),
-                            radius = r
-                        ),
-                        radius = r,
-                        center = center
-                    )
-                }
-        )
-
         Image(
             painter = painterResource(sprite.res),
             contentDescription = "DeepSeek娘",
