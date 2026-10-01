@@ -1,14 +1,15 @@
 package com.deepseek.pet.model
 
-import androidx.annotation.DrawableRes
-import com.deepseek.pet.R
 import com.deepseek.pet.data.BalanceState
 import com.deepseek.pet.data.SecurePrefs
 
 /**
- * DeepSeek娘 的表情状态。
+ * DeepSeek娘 的**余额状态**，只负责配色和文案。
  *
- * 规则（需求 3）：
+ * 立绘（待机/点击）由 [PetSprite] 单独管 —— 两者是正交的：
+ * 立绘决定"她长什么样"，Mood 决定"光晕和文案用什么颜色"。
+ *
+ * 余额规则：
  *   余额充足  total >  阈值(默认 5 元)  -> HAPPY
  *   余额偏低  0 < total <= 阈值        -> WORRIED
  *   余额为零 / 查询失败 / 未配置 Key   -> CRY
@@ -18,15 +19,6 @@ enum class Mood {
     HAPPY,
     WORRIED,
     CRY;
-
-    @get:DrawableRes
-    val drawableRes: Int
-        get() = when (this) {
-            LOADING -> R.drawable.ic_face_loading
-            HAPPY -> R.drawable.ic_face_happy
-            WORRIED -> R.drawable.ic_face_worried
-            CRY -> R.drawable.ic_face_cry
-        }
 
     val title: String
         get() = when (this) {
