@@ -96,7 +96,18 @@ class FloatingPetService :
     private var originX = 0
     private var originY = 0
     private var dragging = false
-    private val touchSlop: Int by lazy { ViewConfiguration.get(this).scaledTouchSlop }
+
+    /**
+     * 点击 / 拖动的分界线。
+     *
+     * 系统的 scaledTouchSlop 只有 8~24px，手指点一下屏幕时的抖动很容易超过它，
+     * 于是 ACTION_UP 被判成"拖动"，卡片根本不展开 —— 表现就是"点一下有时没反应"。
+     * 这里抬到至少 10dp：抖动算点击，真的想拖球肯定会超过。
+     */
+    private val touchSlop: Int by lazy {
+        ViewConfiguration.get(this).scaledTouchSlop
+            .coerceAtLeast((10 * resources.displayMetrics.density).toInt())
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -239,7 +250,13 @@ class FloatingPetService :
             y = savedY
         }
 
-        val container = FrameLayout(this)
+        // 恒拦截：窗口里的 ComposeView 是子 View，会优先吃掉触摸事件，而它是否消费
+        // 又随 Compose 内容（头像/加载圈）变化 —— 这就是"点击、滑动有时没反应"的来源。
+        // 在这里统一拦下，所有事件都走 bubbleTouchListener。
+        val container = object : FrameLayout(this@FloatingPetService) {
+            override fun onInterceptTouchEvent(ev: MotionEvent): Boolean =
+                ev.actionMasked != MotionEvent.ACTION_CANCEL
+        }
         // owner 必须挂在**窗口根 View** 上：Compose 是从 window root 往上找
         // ViewTreeLifecycleOwner 的（找不到直接抛 IllegalStateException，进程崩溃）。
         attachOwners(container)
@@ -305,8 +322,14 @@ class FloatingPetService :
                 true
             }
 
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                if (dragging) {
+            MotionEvent.ACTION_UP -> {
+                // 判定只看**本轮的累计位移**，不看 dragging 标志：
+                // dragging 只要在 MOVE 里越过一次阈值就被置位，之后手指挪回原点
+                // 也仍算拖动，点击就丢了 —— 表现为"点了没反应"。
+                val moved = abs(event.rawX - downRawX) > touchSlop ||
+                    abs(event.rawY - downRawY) > touchSlop
+
+                if (moved) {
                     clampBubble()
                     SecurePrefs.saveBubblePosition(
                         this,
@@ -317,6 +340,11 @@ class FloatingPetService :
                     // 轻点：展开 / 收起余额卡片
                     if (cardAttached) removeCard() else showCard()
                 }
+                dragging = false
+                true
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
                 dragging = false
                 true
             }
