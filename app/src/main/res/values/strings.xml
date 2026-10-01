@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DeepSeek娘</string>
+
+    <string name="notif_channel_name">悬浮宠物</string>
+    <string name="notif_channel_desc">保持 DeepSeek娘 悬浮窗常驻，并显示余额状态</string>
+    <string name="notif_title">DeepSeek娘 正在陪你</string>
+    <string name="action_refresh">刷新余额</string>
+    <string name="action_toggle">显示/隐藏悬浮窗</string>
+    <string name="action_settings">打开设置</string>
+
+    <string name="pet_desc">DeepSeek娘悬浮宠物</string>
+</resources>
