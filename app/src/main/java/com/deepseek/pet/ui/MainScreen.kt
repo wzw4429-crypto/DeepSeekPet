@@ -649,9 +649,9 @@ private fun UsageCard() {
     HyperCard {
         Column(modifier = Modifier.padding(16.dp)) {
             SegmentedControl(
-                options = UsageRange.entries.map { it.label },
+                options = UsageRange.values().map { it.label },
                 selectedIndex = range.ordinal,
-                onSelect = { range = UsageRange.entries[it] }
+                onSelect = { range = UsageRange.values()[it] }
             )
 
             if (range == UsageRange.CUSTOM) {
