@@ -63,14 +63,11 @@ class FloatingPetService :
     // ---- 供 Compose 使用的 Lifecycle / ViewModelStore / SavedState 三件套 ----
     private lateinit var lifecycleRegistry: LifecycleRegistry
     private lateinit var savedStateController: SavedStateRegistryController
-    private val viewModelStore = ViewModelStore()
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
-    override val viewModelStore: ViewModelStore get() = viewModelStoreHolder
+    override val viewModelStore: ViewModelStore = ViewModelStore()
     override val savedStateRegistry: SavedStateRegistry
         get() = savedStateController.savedStateRegistry
-
-    private val viewModelStoreHolder = ViewModelStore()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
