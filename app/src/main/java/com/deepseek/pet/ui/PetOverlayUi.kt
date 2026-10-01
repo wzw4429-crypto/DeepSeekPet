@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,6 +33,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -39,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.deepseek.pet.data.BalanceState
 import com.deepseek.pet.model.Mood
+import com.deepseek.pet.model.PetSprite
 import com.deepseek.pet.ui.theme.HyperBlue
 import com.deepseek.pet.ui.theme.HyperTextSecondary
 
@@ -48,50 +51,50 @@ import com.deepseek.pet.ui.theme.HyperTextSecondary
  * 手势由外层 View 处理，这里只负责画。
  */
 
-/** 桌面上的圆形悬浮球。 */
+/**
+ * 桌面上的 DeepSeek娘 —— 全身立绘，不做圆形裁切（要的就是"只有人物"）。
+ *
+ * [mood] 只决定脚下的光晕颜色（余额状态），[sprite] 决定待机/点击哪张立绘。
+ */
 @Composable
 fun PetBubble(
     mood: Mood,
+    sprite: PetSprite,
     modifier: Modifier = Modifier,
-    size: Dp = 64.dp
+    height: Dp = 150.dp
 ) {
     val accent = Color(mood.accentColor)
 
     Box(
-        modifier = modifier.size(size),
-        contentAlignment = Alignment.Center
+        modifier = modifier.height(height),
+        contentAlignment = Alignment.BottomCenter
     ) {
+        // 脚下的状态光晕：余额变了颜色跟着变，替代表情切换
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .align(Alignment.BottomCenter)
+                .size(width = height * 0.78f, height = height * 0.24f)
                 .background(
                     brush = Brush.radialGradient(
-                        colors = listOf(accent.copy(alpha = 0.45f), Color.Transparent)
+                        colors = listOf(accent.copy(alpha = 0.55f), Color.Transparent)
                     ),
                     shape = CircleShape
                 )
         )
 
-        Surface(
-            modifier = Modifier.fillMaxSize(0.88f),
-            shape = CircleShape,
-            color = Color(0xF7FFFFFF),
-            border = BorderStroke(2.dp, accent.copy(alpha = 0.9f)),
-            shadowElevation = 8.dp
-        ) {
-            Image(
-                painter = painterResource(mood.drawableRes),
-                contentDescription = "DeepSeek娘",
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(3.dp)
-            )
-        }
+        Image(
+            painter = painterResource(sprite.res),
+            contentDescription = "DeepSeek娘",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxHeight()
+                .align(Alignment.BottomCenter)
+        )
 
         if (mood == Mood.LOADING) {
             CircularProgressIndicator(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
+                    .align(Alignment.TopEnd)
                     .size(16.dp),
                 strokeWidth = 2.dp,
                 color = accent
@@ -108,6 +111,7 @@ fun PetBubble(
 fun BalanceCard(
     state: BalanceState,
     mood: Mood,
+    sprite: PetSprite,
     refreshing: Boolean,
     threshold: Double,
     onRefresh: () -> Unit,
@@ -127,19 +131,15 @@ fun BalanceCard(
 
             // ---- 头部 ----
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
+                // 全身立绘当头像：直接放，不套圆角底框（要的就是"只有人物"）
+                Image(
+                    painter = painterResource(sprite.res),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(13.dp))
-                        .background(HyperBlue.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        painter = painterResource(mood.drawableRes),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                        .height(58.dp)
+                        .width(40.dp)
+                )
                 Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(

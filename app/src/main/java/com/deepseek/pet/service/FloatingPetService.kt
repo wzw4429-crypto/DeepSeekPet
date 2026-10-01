@@ -35,6 +35,7 @@ import com.deepseek.pet.data.BalanceRepository
 import com.deepseek.pet.data.BalanceState
 import com.deepseek.pet.data.SecurePrefs
 import com.deepseek.pet.model.Mood
+import com.deepseek.pet.model.PetSprite
 import com.deepseek.pet.ui.BalanceCard
 import com.deepseek.pet.ui.PetBubble
 import com.deepseek.pet.ui.money
@@ -87,6 +88,20 @@ class FloatingPetService :
     private val moodState = mutableStateOf(Mood.LOADING)
     private val balanceState = mutableStateOf<BalanceState>(BalanceState.Loading)
     private val refreshingState = mutableStateOf(false)
+
+    /** 待机/点击两态立绘。 */
+    private val spriteState = mutableStateOf(PetSprite.IDLE)
+
+    /** 点击后切回待机的延时任务，重复点会重新计时。 */
+    private val revertSprite = Runnable { spriteState.value = PetSprite.IDLE }
+
+    /** 被点一下：切到愤怒立绘，[PetSprite.CLICK_REACT_MS] 后自己变回去。 */
+    private fun playClickReaction() {
+        val view = if (::bubbleView.isInitialized) bubbleView else return
+        view.removeCallbacks(revertSprite)
+        spriteState.value = PetSprite.CLICKED
+        view.postDelayed(revertSprite, PetSprite.CLICK_REACT_MS)
+    }
 
     private var threshold = SecurePrefs.DEFAULT_THRESHOLD
 
@@ -235,10 +250,9 @@ class FloatingPetService :
     }
 
     private fun addBubble() {
-        val size = dp(BUBBLE_SIZE_DP)
         bubbleParams = WindowManager.LayoutParams(
-            size,
-            size,
+            dp(PET_W_DP),
+            dp(PET_H_DP),
             overlayType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
@@ -264,7 +278,10 @@ class FloatingPetService :
             attachOwners(this)
             setContent {
                 DeepSeekPetTheme {
-                    PetBubble(mood = moodState.value)
+                    PetBubble(
+                        mood = moodState.value,
+                        sprite = spriteState.value
+                    )
                 }
             }
         }
@@ -337,7 +354,8 @@ class FloatingPetService :
                         bubbleParams.y
                     )
                 } else {
-                    // 轻点：展开 / 收起余额卡片
+                    // 轻点：先炸毛（切愤怒立绘），再展开 / 收起余额卡片
+                    playClickReaction()
                     if (cardAttached) removeCard() else showCard()
                 }
                 dragging = false
@@ -359,9 +377,10 @@ class FloatingPetService :
 
     private fun clampBubble() {
         val metrics = resources.displayMetrics
-        val size = dp(BUBBLE_SIZE_DP)
-        val maxX = (metrics.widthPixels - size).coerceAtLeast(0)
-        val maxY = (metrics.heightPixels - size).coerceAtLeast(0)
+        val w = dp(PET_W_DP)
+        val h = dp(PET_H_DP)
+        val maxX = (metrics.widthPixels - w).coerceAtLeast(0)
+        val maxY = (metrics.heightPixels - h).coerceAtLeast(0)
         bubbleParams.x = bubbleParams.x.coerceIn(0, maxX)
         bubbleParams.y = bubbleParams.y.coerceIn(0, maxY)
         applyBubbleParams()
@@ -395,6 +414,7 @@ class FloatingPetService :
                     BalanceCard(
                         state = balanceState.value,
                         mood = moodState.value,
+                        sprite = spriteState.value,
                         refreshing = refreshingState.value,
                         threshold = threshold,
                         onRefresh = { repository.refresh() },
@@ -425,14 +445,14 @@ class FloatingPetService :
         val cardW = cardView.width
         val cardH = cardView.height
 
-        var x = bubbleParams.x + dp(BUBBLE_SIZE_DP) / 2 - cardW / 2
+        var x = bubbleParams.x + dp(PET_W_DP) / 2 - cardW / 2
         x = x.coerceIn(margin, (metrics.widthPixels - cardW - margin).coerceAtLeast(margin))
 
-        val bubbleCenterY = bubbleParams.y + dp(BUBBLE_SIZE_DP) / 2
+        val bubbleCenterY = bubbleParams.y + dp(PET_H_DP) / 2
         var y = if (bubbleCenterY > metrics.heightPixels / 2) {
             bubbleParams.y - cardH - margin          // 球在下方 → 卡片往上弹
         } else {
-            bubbleParams.y + dp(BUBBLE_SIZE_DP) + margin  // 球在上方 → 卡片往下弹
+            bubbleParams.y + dp(PET_H_DP) + margin   // 球在上方 → 卡片往下弹
         }
         y = y.coerceIn(margin, (metrics.heightPixels - cardH - margin).coerceAtLeast(margin))
 
@@ -482,7 +502,10 @@ class FloatingPetService :
         const val ACTION_REFRESH = "com.deepseek.pet.action.REFRESH"
         const val ACTION_TOGGLE = "com.deepseek.pet.action.TOGGLE"
 
-        private const val BUBBLE_SIZE_DP = 64
+        // 全身立绘是竖构图（527x800 / 565x800），按高度定窗口；
+        // 宽度取两张立绘中较宽的那张，避免愤怒表情被 ContentScale.Fit 压扁。
+        private const val PET_W_DP = 110
+        private const val PET_H_DP = 150
         private const val CARD_WIDTH_DP = 268
 
         @Volatile

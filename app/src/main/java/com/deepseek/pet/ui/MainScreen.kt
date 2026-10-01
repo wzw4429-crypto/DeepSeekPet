@@ -76,6 +76,7 @@ import com.deepseek.pet.data.BalanceRepository
 import com.deepseek.pet.data.BalanceState
 import com.deepseek.pet.data.SecurePrefs
 import com.deepseek.pet.model.Mood
+import com.deepseek.pet.model.PetSprite
 import com.deepseek.pet.service.FloatingPetService
 import com.deepseek.pet.ui.theme.HyperBlue
 import com.deepseek.pet.ui.theme.HyperDivider
@@ -380,7 +381,7 @@ private fun StatusCard(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PetBubble(mood = mood, size = 72.dp)
+            PetBubble(mood = mood, sprite = PetSprite.IDLE, height = 108.dp)
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
