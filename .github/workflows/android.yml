@@ -23,13 +23,21 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
+      # 注意：不用 android-actions/setup-android@v3。
+      # 它默认会跑 `sdkmanager --install tools`，而 `tools` 包已从 SDK 源下架，
+      # 导致该 action 直接 exit 1，构建在第一步就挂掉。
+      # GitHub 的 ubuntu-latest 镜像本来就预装了 cmdline-tools，直接调用即可。
+      - name: Prepare Android SDK
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null
+          set -e
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "SDK root = $SDK"
+          SDKMGR=$(find "$SDK/cmdline-tools" -maxdepth 3 -name sdkmanager -type f | sort | tail -1)
+          echo "sdkmanager = $SDKMGR"
+          yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+          "$SDKMGR" "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null
+          echo "sdk.dir=$SDK" > local.properties
+          cat local.properties
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -46,11 +54,14 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk out/DeepSeekPet-debug-v1.0.0.apk
           ls -la out
 
-      - name: Verify signature
+      - name: Verify fixed signature
         run: |
-          BT=$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)
-          "$ANDROID_HOME/build-tools/$BT/apksigner" verify --print-certs \
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK/build-tools/34.0.0/apksigner" verify --print-certs \
             out/DeepSeekPet-release-v1.0.0.apk | head -20
+          echo "--- debug 与 release 证书指纹必须一致 ---"
+          "$SDK/build-tools/34.0.0/apksigner" verify --print-certs out/DeepSeekPet-release-v1.0.0.apk | rg "SHA-256"
+          "$SDK/build-tools/34.0.0/apksigner" verify --print-certs out/DeepSeekPet-debug-v1.0.0.apk | rg "SHA-256"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -66,7 +77,7 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DeepSeekPet build ${{ github.run_number }}
           body: |
-            自动构建产物（固定签名）。
+            自动构建产物（固定签名，debug/release 同一证书，可互相覆盖安装）。
             - DeepSeekPet-release-v1.0.0.apk
             - DeepSeekPet-debug-v1.0.0.apk
           files: out/*.apk
