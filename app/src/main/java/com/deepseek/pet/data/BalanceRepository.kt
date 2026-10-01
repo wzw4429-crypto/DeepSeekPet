@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 class BalanceRepository private constructor(private val appContext: Context) {
 
     private val api = DeepSeekApi()
+    private val history by lazy { BalanceHistory.get(appContext) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val _state = MutableStateFlow<BalanceState>(BalanceState.Loading)
@@ -48,6 +49,8 @@ class BalanceRepository private constructor(private val appContext: Context) {
             try {
                 val info = api.fetchBalance(key)
                 _state.value = BalanceState.Success(info, System.currentTimeMillis())
+                // 落一条快照，供"消耗额度"按区间推算（DeepSeek 没有用量接口）
+                history.record(info.totalBalance)
             } catch (e: DeepSeekException) {
                 _state.value = BalanceState.Error(e.message ?: "查询失败")
             } catch (e: Exception) {

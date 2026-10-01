@@ -38,16 +38,20 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -72,9 +76,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.LocalDate
+import java.time.ZoneOffset
+import com.deepseek.pet.data.BalanceHistory
 import com.deepseek.pet.data.BalanceRepository
 import com.deepseek.pet.data.BalanceState
 import com.deepseek.pet.data.SecurePrefs
+import com.deepseek.pet.data.UsageRange
 import com.deepseek.pet.model.Mood
 import com.deepseek.pet.model.PetSprite
 import com.deepseek.pet.service.FloatingPetService
@@ -156,6 +164,13 @@ fun MainScreen() {
 
             // ---------- 宠物状态 + 余额 ----------
             StatusCard(balanceState = balanceState, mood = mood, refreshing = refreshing)
+
+            Spacer(Modifier.height(20.dp))
+
+            // ---------- 消耗额度（由余额快照推算）----------
+            HyperSectionTitle("消耗额度")
+            Spacer(Modifier.height(8.dp))
+            UsageCard()
 
             Spacer(Modifier.height(20.dp))
 
@@ -293,15 +308,14 @@ fun MainScreen() {
 
             Spacer(Modifier.height(20.dp))
 
-            // ---------- 表情规则 ----------
-            HyperSectionTitle("表情规则")
+            // ---------- 立绘与光晕 ----------
+            HyperSectionTitle("立绘与光晕")
             Spacer(Modifier.height(8.dp))
             HyperCard {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "余额充足（大于阈值）→ 开心\n" +
-                            "余额偏低（0 ~ 阈值）→ 担忧\n" +
-                            "余额为零或查询失败 → 哭泣",
+                        text = "立绘：待机 → 愤怒叉腰；点击 → 托腮笑（余额卡片展开期间保持）\n" +
+                            "脚底光晕随余额变化：充足 → 绿 · 偏低 → 橙 · 告急 → 红",
                         style = MaterialTheme.typography.bodyMedium,
                         color = HyperTextSecondary,
                         lineHeight = 22.sp
@@ -603,3 +617,209 @@ private class PetNotificationGrant(context: Context) {
         true
     }
 }
+
+// ----------------------------------------------------------------------
+// 消耗额度
+// ----------------------------------------------------------------------
+
+/**
+ * 按区间推算消耗。
+ *
+ * DeepSeek 官方只开放 `get-user-balance`，**没有用量查询接口**，所以只能把每 10 分钟
+ * 落一次的余额快照拿区间内的下降段累加 —— 这是估算值，不是账单。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UsageCard() {
+    val context = LocalContext.current
+    val history = remember { BalanceHistory.get(context) }
+    val snapshots by history.snapshots.collectAsStateWithLifecycle()
+
+    var range by remember { mutableStateOf(UsageRange.TODAY) }
+    var customFrom by remember { mutableStateOf(LocalDate.now().minusDays(6)) }
+    var customTo by remember { mutableStateOf(LocalDate.now()) }
+    var showFromPicker by remember { mutableStateOf(false) }
+    var showToPicker by remember { mutableStateOf(false) }
+
+    val summary = remember(snapshots, range, customFrom, customTo) {
+        val (from, to) = BalanceHistory.bounds(range, customFrom, customTo)
+        history.summarize(from, to)
+    }
+
+    HyperCard {
+        Column(modifier = Modifier.padding(16.dp)) {
+            SegmentedControl(
+                options = UsageRange.entries.map { it.label },
+                selectedIndex = range.ordinal,
+                onSelect = { range = UsageRange.entries[it] }
+            )
+
+            if (range == UsageRange.CUSTOM) {
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    DateField(
+                        label = "开始",
+                        date = customFrom,
+                        modifier = Modifier.weight(1f),
+                        onClick = { showFromPicker = true }
+                    )
+                    DateField(
+                        label = "结束",
+                        date = customTo,
+                        modifier = Modifier.weight(1f),
+                        onClick = { showToPicker = true }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
+            Text(
+                text = "¥${money(summary.amount)}",
+                fontSize = 40.sp,
+                fontWeight = FontWeight.Bold,
+                color = HyperBlue
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "${shortDate(summary.from)} ~ ${shortDate(summary.to)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = HyperTextSecondary
+            )
+
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MiniStat(
+                    label = "采样次数",
+                    value = "${summary.samples} 次",
+                    modifier = Modifier.weight(1f)
+                )
+                MiniStat(
+                    label = "区间内充值",
+                    value = if (summary.hasRecharge) "有" else "无",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = when {
+                    summary.samples == 0 ->
+                        "该区间还没有余额采样。App 每 10 分钟自动记一次，用得越久越准。"
+                    summary.hasRecharge ->
+                        "区间内余额有过上涨（充值），推算值可能偏小。"
+                    else ->
+                        "由余额快照推算（每 10 分钟采样），属估算值，与控制台账单可能有出入。"
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = HyperTextSecondary
+            )
+        }
+    }
+
+    if (showFromPicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = pickerMillis(customFrom))
+        DatePickerDialog(
+            onDismissRequest = { showFromPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let {
+                        customFrom = BalanceHistory.dateFromPickerMillis(it)
+                    }
+                    showFromPicker = false
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFromPicker = false }) { Text("取消") }
+            }
+        ) { DatePicker(state = state) }
+    }
+
+    if (showToPicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = pickerMillis(customTo))
+        DatePickerDialog(
+            onDismissRequest = { showToPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let {
+                        customTo = BalanceHistory.dateFromPickerMillis(it)
+                    }
+                    showToPicker = false
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showToPicker = false }) { Text("取消") }
+            }
+        ) { DatePicker(state = state) }
+    }
+}
+
+/** 分段选择器：今日 / 近7天 / 本月 / 自选。 */
+@Composable
+private fun SegmentedControl(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(50))
+            .background(HyperFill)
+            .padding(4.dp)
+    ) {
+        options.forEachIndexed { i, label ->
+            val selected = i == selectedIndex
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(50))
+                    .background(if (selected) HyperBlue else Color.Transparent)
+                    .clickable { onSelect(i) }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 13.sp,
+                    color = if (selected) Color.White else HyperTextSecondary,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DateField(
+    label: String,
+    date: LocalDate,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = HyperFill
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = HyperTextSecondary
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(text = date.toString(), style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
+
+private fun shortDate(millis: Long): String {
+    val d = java.time.Instant.ofEpochMilli(millis)
+        .atZone(java.time.ZoneId.systemDefault())
+        .toLocalDate()
+    return "%02d-%02d".format(d.monthValue, d.dayOfMonth)
+}
+
+/** DatePicker 用 UTC 零点表示选中日，取正午可避免跨时区算错一天。 */
+private fun pickerMillis(date: LocalDate): Long =
+    date.atTime(12, 0).toInstant(ZoneOffset.UTC).toEpochMilli()
