@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DeepSeek娘 · 担忧（余额 0 ~ 5 元） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 呆毛（下垂） -->
+    <path
+        android:pathData="M58,18 C58,12 66,9 70,14"
+        android:strokeColor="#3A57E8"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+
+    <!-- 头发 -->
+    <path
+        android:fillColor="#4D6BFE"
+        android:pathData="M54,56 m-46,0 a46,46 0 1,0 92,0 a46,46 0 1,0 -92,0 z" />
+
+    <!-- 脸 -->
+    <path
+        android:fillColor="#FFF4E9"
+        android:pathData="M54,62 m-34,0 a34,32 0 1,0 68,0 a34,32 0 1,0 -68,0 z" />
+
+    <!-- 八字眉 -->
+    <path
+        android:pathData="M30,50 C34,44 40,43 45,47"
+        android:strokeColor="#20242E"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M78,50 C74,44 68,43 63,47"
+        android:strokeColor="#20242E"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+
+    <!-- 圆眼睛 -->
+    <path
+        android:fillColor="#20242E"
+        android:pathData="M40,61 m-4.5,0 a4.5,5 0 1,0 9,0 a4.5,5 0 1,0 -9,0 z" />
+    <path
+        android:fillColor="#20242E"
+        android:pathData="M68,61 m-4.5,0 a4.5,5 0 1,0 9,0 a4.5,5 0 1,0 -9,0 z" />
+
+    <!-- 抿着的嘴 -->
+    <path
+        android:pathData="M46,79 C50,75 58,75 62,79"
+        android:strokeColor="#20242E"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+
+    <!-- 汗滴 -->
+    <path
+        android:fillColor="#63B7FF"
+        android:pathData="M84,40 C88,46 90,50 87,54 C84,57 79,55 79,50 C79,46 81,43 84,40 z" />
+</vector>
