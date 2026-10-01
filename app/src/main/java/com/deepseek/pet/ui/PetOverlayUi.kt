@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -69,17 +70,27 @@ fun PetBubble(
         modifier = modifier.height(height),
         contentAlignment = Alignment.BottomCenter
     ) {
-        // 脚下的状态光晕：余额变了颜色跟着变，替代表情切换
+        // 脚下的状态光晕：余额变了颜色跟着变，替代表情切换。
+        //
+        // 半径必须显式写成"圆的半径"——radialGradient 不指定 radius 时按盒子尺寸铺，
+        // 渐变还没退到透明就被裁断，边缘出现一道硬边，在浅色底上看着就是一块
+        // 实心色块（余额充足时是绿色，用户反馈的"中间偏下绿块"就是它）。
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .size(width = height * 0.78f, height = height * 0.24f)
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(accent.copy(alpha = 0.55f), Color.Transparent)
-                    ),
-                    shape = CircleShape
-                )
+                .padding(bottom = height * 0.02f)
+                .size(height * 0.42f)
+                .drawBehind {
+                    val r = size.minDimension / 2f
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(accent.copy(alpha = 0.55f), Color.Transparent),
+                            radius = r
+                        ),
+                        radius = r,
+                        center = center
+                    )
+                }
         )
 
         Image(
