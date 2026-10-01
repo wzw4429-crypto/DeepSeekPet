@@ -9,6 +9,7 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -225,10 +226,11 @@ class FloatingPetService :
         }
 
         val container = FrameLayout(this)
+        // owner 必须挂在**窗口根 View** 上：Compose 是从 window root 往上找
+        // ViewTreeLifecycleOwner 的（找不到直接抛 IllegalStateException，进程崩溃）。
+        attachOwners(container)
         val composeView = ComposeView(this).apply {
-            setViewTreeLifecycleOwner(this@FloatingPetService)
-            setViewTreeViewModelStoreOwner(this@FloatingPetService)
-            setViewTreeSavedStateRegistryOwner(this@FloatingPetService)
+            attachOwners(this)
             setContent {
                 DeepSeekPetTheme {
                     PetBubble(mood = moodState.value)
@@ -245,8 +247,21 @@ class FloatingPetService :
         container.setOnTouchListener(bubbleTouchListener)
 
         bubbleView = container
-        runCatching { windowManager.addView(bubbleView, bubbleParams) }
+        addWindowView(bubbleView, bubbleParams, "bubble")
         bubbleView.post { clampBubble() }
+    }
+
+    /**
+     * 加窗口。之前这里是 `runCatching {}`，异常被静默吞掉 —— 排查「桌面上什么都不显示」时
+     * 一行线索都没有。现在必须落日志。
+     */
+    private fun addWindowView(view: View, params: WindowManager.LayoutParams, tag: String) {
+        try {
+            windowManager.addView(view, params)
+            Log.i(TAG, "overlay $tag added, size=${params.width}x${params.height} pos=${params.x},${params.y}")
+        } catch (t: Throwable) {
+            Log.e(TAG, "overlay $tag addView failed", t)
+        }
     }
 
     private val bubbleTouchListener = View.OnTouchListener { _, event ->
@@ -358,7 +373,7 @@ class FloatingPetService :
         // 点卡片空白区域外不收，靠右上角的 × 或者再点一次悬浮球
         cardView = container
         cardAttached = true
-        runCatching { windowManager.addView(cardView, cardParams) }
+        addWindowView(cardView, cardParams, "card")
         cardView.post { repositionCard() }
     }
 
@@ -419,6 +434,8 @@ class FloatingPetService :
         (value * resources.displayMetrics.density).toInt()
 
     companion object {
+        private const val TAG = "DeepSeekPet"
+
         const val ACTION_START = "com.deepseek.pet.action.START"
         const val ACTION_STOP = "com.deepseek.pet.action.STOP"
         const val ACTION_REFRESH = "com.deepseek.pet.action.REFRESH"
@@ -430,6 +447,23 @@ class FloatingPetService :
         @Volatile
         var isRunning: Boolean = false
             private set
+
+        fun start(context: Context) {
+            val intent = Intent(context, FloatingPetService::class.java).setAction(ACTION_START)
+            ContextCompat.startForegroundService(context, intent)
+        }
+
+        fun stop(context: Context) {
+            context.stopService(Intent(context, FloatingPetService::class.java))
+        }
+
+        fun refresh(context: Context) {
+            val intent = Intent(context, FloatingPetService::class.java).setAction(ACTION_REFRESH)
+            runCatching { ContextCompat.startForegroundService(context, intent) }
+        }
+    }
+}
+ate set
 
         fun start(context: Context) {
             val intent = Intent(context, FloatingPetService::class.java).setAction(ACTION_START)
