@@ -89,18 +89,30 @@ class FloatingPetService :
     private val balanceState = mutableStateOf<BalanceState>(BalanceState.Loading)
     private val refreshingState = mutableStateOf(false)
 
-    /** 待机/点击两态立绘。 */
+    /** 待机/点击两态立绘。**只要余额卡片开着就一直是点击形象。** */
     private val spriteState = mutableStateOf(PetSprite.IDLE)
 
-    /** 点击后切回待机的延时任务，重复点会重新计时。 */
     private val revertSprite = Runnable { spriteState.value = PetSprite.IDLE }
 
-    /** 被点一下：切到愤怒立绘，[PetSprite.CLICK_REACT_MS] 后自己变回去。 */
-    private fun playClickReaction() {
+    /**
+     * 轻点悬浮球：开 / 关余额卡片。
+     *
+     * 形象规则：卡片展开期间恒为点击形象（不计时回退），卡片关闭才回待机；
+     * 只有"卡片没开成功"这种异常才用 [PetSprite.CLICK_REACT_MS] 兜底，
+     * 免得卡在点击形象不动。
+     */
+    private fun toggleCard() {
+        if (cardAttached) {
+            removeCard()
+            return
+        }
+        spriteState.value = PetSprite.CLICKED
+        showCard()
         val view = if (::bubbleView.isInitialized) bubbleView else return
         view.removeCallbacks(revertSprite)
-        spriteState.value = PetSprite.CLICKED
-        view.postDelayed(revertSprite, PetSprite.CLICK_REACT_MS)
+        if (!cardAttached) {
+            view.postDelayed(revertSprite, PetSprite.CLICK_REACT_MS)
+        }
     }
 
     private var threshold = SecurePrefs.DEFAULT_THRESHOLD
@@ -354,9 +366,8 @@ class FloatingPetService :
                         bubbleParams.y
                     )
                 } else {
-                    // 轻点：先炸毛（切愤怒立绘），再展开 / 收起余额卡片
-                    playClickReaction()
-                    if (cardAttached) removeCard() else showCard()
+                    // 轻点：开 / 关余额卡片（卡片期间保持点击形象）
+                    toggleCard()
                 }
                 dragging = false
                 true
@@ -465,6 +476,9 @@ class FloatingPetService :
         if (!cardAttached) return
         cardAttached = false
         runCatching { windowManager.removeView(cardView) }
+        // 卡片一关就回待机形象
+        if (::bubbleView.isInitialized) bubbleView.removeCallbacks(revertSprite)
+        spriteState.value = PetSprite.IDLE
     }
 
     // ------------------------------------------------------------------
