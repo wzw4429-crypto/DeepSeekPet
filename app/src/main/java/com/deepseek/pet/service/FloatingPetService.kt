@@ -209,6 +209,20 @@ class FloatingPetService :
     // 悬浮球
     // ------------------------------------------------------------------
 
+    /**
+     * 给窗口里的 View 注入 Lifecycle / ViewModelStore / SavedState 三件套。
+     *
+     * **必须加在 `windowManager.addView()` 的那个根 View 上**：ComposeView 的
+     * `resolveParentCompositionContext()` 会一路走到 window root 才去取
+     * ViewTreeLifecycleOwner，只挂在 ComposeView 自己身上是没用的，根上取不到
+     * 就直接抛 IllegalStateException，整个进程崩掉、窗口随之消失。
+     */
+    private fun attachOwners(target: View) {
+        target.setViewTreeLifecycleOwner(this@FloatingPetService)
+        target.setViewTreeViewModelStoreOwner(this@FloatingPetService)
+        target.setViewTreeSavedStateRegistryOwner(this@FloatingPetService)
+    }
+
     private fun addBubble() {
         val size = dp(BUBBLE_SIZE_DP)
         bubbleParams = WindowManager.LayoutParams(
@@ -345,10 +359,9 @@ class FloatingPetService :
         }
 
         val container = FrameLayout(this)
+        attachOwners(container)
         val composeView = ComposeView(this).apply {
-            setViewTreeLifecycleOwner(this@FloatingPetService)
-            setViewTreeViewModelStoreOwner(this@FloatingPetService)
-            setViewTreeSavedStateRegistryOwner(this@FloatingPetService)
+            attachOwners(this)
             setContent {
                 DeepSeekPetTheme {
                     BalanceCard(
@@ -447,23 +460,6 @@ class FloatingPetService :
         @Volatile
         var isRunning: Boolean = false
             private set
-
-        fun start(context: Context) {
-            val intent = Intent(context, FloatingPetService::class.java).setAction(ACTION_START)
-            ContextCompat.startForegroundService(context, intent)
-        }
-
-        fun stop(context: Context) {
-            context.stopService(Intent(context, FloatingPetService::class.java))
-        }
-
-        fun refresh(context: Context) {
-            val intent = Intent(context, FloatingPetService::class.java).setAction(ACTION_REFRESH)
-            runCatching { ContextCompat.startForegroundService(context, intent) }
-        }
-    }
-}
-ate set
 
         fun start(context: Context) {
             val intent = Intent(context, FloatingPetService::class.java).setAction(ACTION_START)
