@@ -48,6 +48,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * 悬浮宠物前台服务。
@@ -124,10 +125,10 @@ class FloatingPetService :
 
     /** 立绘窗口宽高（dp），随缩放变化。 */
     private fun petWidthDp(): Int =
-        (PET_W_DP * scaleState.value).toInt().coerceAtLeast(40)
+        (PET_W_DP * scaleState.value).roundToInt().coerceAtLeast(40)
 
     private fun petHeightDp(): Int =
-        (PET_H_DP * scaleState.value).toInt().coerceAtLeast(56)
+        (PET_H_DP * scaleState.value).roundToInt().coerceAtLeast(56)
 
     /**
      * 重新设置悬浮球窗口尺寸 —— 应用内调完滑杆后立刻生效。
