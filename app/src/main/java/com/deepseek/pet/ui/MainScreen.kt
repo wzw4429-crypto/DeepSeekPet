@@ -866,8 +866,12 @@ private fun PetSizeCard() {
 
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "拖动滑杆调整桌面上 DeepSeek娘 的大小，松手立即生效；" +
-                    "悬浮服务正在运行时也会实时调整，无需重启。",
+                // 这里只说清"怎么用"和"范围"，**不放中间刻度文字**——
+                // 0.6~2.4 的范围里 100% 真实位置在轨道 22% 处，
+                // 画在正中间会让人以为滑块停在 100%，实际已是 150%，
+                // 表现就是"滑杆下的文字与实际大小不合"。
+                text = "拖动滑杆调整桌面上 DeepSeek娘 的大小，松手立即生效；悬浮服务正在运行时" +
+                    "也会实时调整，无需重启。默认 100%，每档 10%，最大 240%。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = HyperTextSecondary
             )
@@ -886,12 +890,12 @@ private fun PetSizeCard() {
                 )
             )
 
+            // 两端标签与轨道两端对齐（滑杆轨道跨度 = 节点全宽，已实测）
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text("60%", style = MaterialTheme.typography.labelMedium, color = HyperTextSecondary)
-                Text("默认 100%", style = MaterialTheme.typography.labelMedium, color = HyperTextSecondary)
                 Text("240%", style = MaterialTheme.typography.labelMedium, color = HyperTextSecondary)
             }
         }
