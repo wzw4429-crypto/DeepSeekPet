@@ -14,10 +14,12 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.dp
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -117,6 +119,31 @@ class FloatingPetService :
 
     private var threshold = SecurePrefs.DEFAULT_THRESHOLD
 
+    /** 桌面人物缩放（应用内滑杆可调），同时驱动窗口尺寸与立绘绘制高度。 */
+    private val scaleState = mutableStateOf(1f)
+
+    /** 立绘窗口宽高（dp），随缩放变化。 */
+    private fun petWidthDp(): Int =
+        (PET_W_DP * scaleState.value).toInt().coerceAtLeast(40)
+
+    private fun petHeightDp(): Int =
+        (PET_H_DP * scaleState.value).toInt().coerceAtLeast(56)
+
+    /**
+     * 重新设置悬浮球窗口尺寸 —— 应用内调完滑杆后立刻生效。
+     * 窗口尺寸变了要重新 clamp，否则放大后可能有一部分跑到屏幕外。
+     */
+    private fun applyBubbleSize() {
+        if (!::bubbleView.isInitialized) return
+        val w = dp(petWidthDp())
+        val h = dp(petHeightDp())
+        if (bubbleParams.width == w && bubbleParams.height == h) return
+        bubbleParams.width = w
+        bubbleParams.height = h
+        applyBubbleParams()
+        clampBubble()
+    }
+
     // 拖拽用
     private var downRawX = 0f
     private var downRawY = 0f
@@ -149,6 +176,7 @@ class FloatingPetService :
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         threshold = SecurePrefs.threshold(this)
+        scaleState.value = SecurePrefs.bubbleScale(this)
 
         startForegroundSafely()
         observeBalance()
@@ -241,6 +269,15 @@ class FloatingPetService :
         scope.launch {
             repository.refreshing.collect { refreshingState.value = it }
         }
+        // 应用内拖动"人物大小"滑杆 → SecurePrefs 落盘并更新 StateFlow → 这里立刻重设窗口
+        scope.launch {
+            SecurePrefs.scale.collect { s ->
+                if (s > 0f && s != scaleState.value) {
+                    scaleState.value = s
+                    applyBubbleSize()
+                }
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -263,8 +300,8 @@ class FloatingPetService :
 
     private fun addBubble() {
         bubbleParams = WindowManager.LayoutParams(
-            dp(PET_W_DP),
-            dp(PET_H_DP),
+            dp(petWidthDp()),
+            dp(petHeightDp()),
             overlayType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
@@ -292,7 +329,9 @@ class FloatingPetService :
                 DeepSeekPetTheme {
                     PetBubble(
                         mood = moodState.value,
-                        sprite = spriteState.value
+                        sprite = spriteState.value,
+                        // 随应用内"人物大小"同步放大/缩小，否则窗口变大人物不跟着变
+                        height = (PET_H_DP * scaleState.value).dp
                     )
                 }
             }
@@ -388,8 +427,8 @@ class FloatingPetService :
 
     private fun clampBubble() {
         val metrics = resources.displayMetrics
-        val w = dp(PET_W_DP)
-        val h = dp(PET_H_DP)
+        val w = dp(petWidthDp())
+        val h = dp(petHeightDp())
         val maxX = (metrics.widthPixels - w).coerceAtLeast(0)
         val maxY = (metrics.heightPixels - h).coerceAtLeast(0)
         bubbleParams.x = bubbleParams.x.coerceIn(0, maxX)
@@ -445,8 +484,33 @@ class FloatingPetService :
         // 点卡片空白区域外不收，靠右上角的 × 或者再点一次悬浮球
         cardView = container
         cardAttached = true
+
+        // 关键：**先隐形挂载**。卡片初始 x=0,y=0（屏幕左上角），必须等首次布局
+        // 拿到真实宽高、repositionCard() 定位之后才移动 —— 若直接显示，会先在
+        // 左上角闪一帧再跳到正确位置，快速点击时肉眼非常明显。
+        container.visibility = View.INVISIBLE
         addWindowView(cardView, cardParams, "card")
-        cardView.post { repositionCard() }
+
+        cardView.viewTreeObserver.addOnGlobalLayoutListener(object :
+            ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                val v = cardView
+                if (!cardAttached || v.width == 0 || v.height == 0) return
+                if (v.viewTreeObserver.isAlive) {
+                    v.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                }
+                repositionCard()
+                v.visibility = View.VISIBLE
+            }
+        })
+
+        // 兜底：布局回调万一没来，100ms 后也要显示，否则卡片永远出不来
+        cardView.postDelayed({
+            if (cardAttached && cardView.visibility != View.VISIBLE) {
+                repositionCard()
+                cardView.visibility = View.VISIBLE
+            }
+        }, FALLBACK_SHOW_MS)
     }
 
     private fun repositionCard() {
@@ -456,14 +520,14 @@ class FloatingPetService :
         val cardW = cardView.width
         val cardH = cardView.height
 
-        var x = bubbleParams.x + dp(PET_W_DP) / 2 - cardW / 2
+        var x = bubbleParams.x + dp(petWidthDp()) / 2 - cardW / 2
         x = x.coerceIn(margin, (metrics.widthPixels - cardW - margin).coerceAtLeast(margin))
 
-        val bubbleCenterY = bubbleParams.y + dp(PET_H_DP) / 2
+        val bubbleCenterY = bubbleParams.y + dp(petHeightDp()) / 2
         var y = if (bubbleCenterY > metrics.heightPixels / 2) {
             bubbleParams.y - cardH - margin          // 球在下方 → 卡片往上弹
         } else {
-            bubbleParams.y + dp(PET_H_DP) + margin   // 球在上方 → 卡片往下弹
+            bubbleParams.y + dp(petHeightDp()) + margin   // 球在上方 → 卡片往下弹
         }
         y = y.coerceIn(margin, (metrics.heightPixels - cardH - margin).coerceAtLeast(margin))
 
@@ -521,6 +585,9 @@ class FloatingPetService :
         private const val PET_W_DP = 110
         private const val PET_H_DP = 150
         private const val CARD_WIDTH_DP = 268
+
+        /** 卡片隐形挂载后，布局回调万一没来，超过这个时间就强制显示。 */
+        private const val FALLBACK_SHOW_MS = 100L
 
         @Volatile
         var isRunning: Boolean = false
