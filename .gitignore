@@ -1,6 +1,9 @@
 *.iml
 .gradle/
 local.properties
+# 签名密钥只存在于 CI Secrets 与本地，绝不入库
+keystore.properties
+keystore/
 .idea/
 .DS_Store
 build/

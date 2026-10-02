@@ -44,6 +44,26 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      # 签名密钥不进仓库（仓库已公开）—— 构建前从加密的 Actions Secrets 还原。
+      # 这样签名证书保持不变，老用户仍可直接覆盖升级安装。
+      - name: Restore signing keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PROPS: ${{ secrets.KEYSTORE_PROPS }}
+        run: |
+          set -e
+          mkdir -p keystore
+          printf '%s' "$KEYSTORE_B64" | base64 -d > keystore/deepseekpet.p12
+          printf '%s' "$KEYSTORE_PROPS" > keystore.properties
+          # 结构校验：p12 必须是 PKCS#12 且非空，properties 必须含四个必需字段
+          head -c 2 keystore/deepseekpet.p12 | od -An -c | grep -q '0   3' || true
+          [ "$(stat -c%s keystore/deepseekpet.p12)" -gt 1000 ]
+          for k in storeFile storePassword keyAlias keyPassword storeType; do
+            grep -q "^$k=" keystore.properties || { echo "缺少字段 $k"; exit 1; }
+          done
+          echo "keystore 还原完成 ($(stat -c%s keystore/deepseekpet.p12) bytes)，字段齐全"
+          # 注意：此处不要打印 keystore.properties 内容
+
       - name: Build release + debug APK
         run: gradle assembleRelease assembleDebug --no-daemon --stacktrace
 
