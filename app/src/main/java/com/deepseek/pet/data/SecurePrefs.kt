@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * API Key 与偏好设置的落地存储。
@@ -96,5 +99,38 @@ object SecurePrefs {
 
     fun saveBubblePosition(context: Context, x: Int, y: Int) {
         ui(context).edit().putInt(KEY_BUBBLE_X, x).putInt(KEY_BUBBLE_Y, y).apply()
+    }
+
+    // ---- 人物大小 ----
+
+    /** 桌面人物缩放比例的上下限（1f = 默认 110x150dp）。 */
+    const val MIN_SCALE = 0.6f
+    const val MAX_SCALE = 2.4f
+
+    const val KEY_BUBBLE_SCALE = "bubble_scale"
+    private const val UNSET_SCALE = -1f
+
+    /**
+     * 当前缩放比例。
+     *
+     * 用 StateFlow 暴露：主界面拖滑杆 → 存盘并更新这里 → 悬浮服务收到后
+     * 立刻改窗口宽高并 `updateViewLayout`，人物大小即时生效。
+     * 未初始化时是 [UNSET_SCALE]，首次 [bubbleScale] 读取后才变成真实值。
+     */
+    private val _scale = MutableStateFlow(UNSET_SCALE)
+    val scale: StateFlow<Float> = _scale.asStateFlow()
+
+    fun bubbleScale(context: Context): Float {
+        val cur = _scale.value
+        if (cur > 0f) return cur
+        val v = ui(context).getFloat(KEY_BUBBLE_SCALE, 1f).coerceIn(MIN_SCALE, MAX_SCALE)
+        _scale.value = v
+        return v
+    }
+
+    fun saveBubbleScale(context: Context, value: Float) {
+        val v = value.coerceIn(MIN_SCALE, MAX_SCALE)
+        ui(context).edit().putFloat(KEY_BUBBLE_SCALE, v).apply()
+        _scale.value = v
     }
 }

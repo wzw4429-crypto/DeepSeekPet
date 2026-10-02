@@ -44,6 +44,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -238,6 +240,13 @@ fun MainScreen() {
                     }
                 )
             }
+
+            Spacer(Modifier.height(20.dp))
+
+            // ---------- 人物大小 ----------
+            HyperSectionTitle("人物大小")
+            Spacer(Modifier.height(8.dp))
+            PetSizeCard()
 
             Spacer(Modifier.height(20.dp))
 
@@ -823,3 +832,68 @@ private fun shortDate(millis: Long): String {
 /** DatePicker 用 UTC 零点表示选中日，取正午可避免跨时区算错一天。 */
 private fun pickerMillis(date: LocalDate): Long =
     date.atTime(12, 0).toInstant(ZoneOffset.UTC).toEpochMilli()
+
+/**
+ * 桌面人物大小调节。
+ *
+ * 调的是"窗口宽高 + 立绘绘制高度"的比例（1f = 默认 110×150dp）。改完落盘并更新
+ * [SecurePrefs.scale]（StateFlow），悬浮服务订阅到就立刻 `updateViewLayout`，
+ * **服务运行中也能实时改**，不用重启悬浮窗。
+ */
+@Composable
+private fun PetSizeCard() {
+    val context = LocalContext.current
+    // 记忆块顺带完成 StateFlow 初始化（未读过 prefs 时 flow 里是 -1f）
+    val fallback = remember { SecurePrefs.bubbleScale(context) }
+    val raw by SecurePrefs.scale.collectAsStateWithLifecycle()
+    val scale = if (raw > 0f) raw else fallback
+
+    HyperCard {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "桌面立绘尺寸",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "${(scale * 100).toInt()}%",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = HyperBlue
+                )
+            }
+
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "拖动滑杆调整桌面上 DeepSeek娘 的大小，松手立即生效；" +
+                    "悬浮服务正在运行时也会实时调整，无需重启。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = HyperTextSecondary
+            )
+
+            Spacer(Modifier.height(8.dp))
+            Slider(
+                value = scale,
+                onValueChange = { SecurePrefs.saveBubbleScale(context, it) },
+                valueRange = SecurePrefs.MIN_SCALE..SecurePrefs.MAX_SCALE,
+                // 0.6 ~ 2.4 共 18 段，对应 17 个中间档 → 每档正好 10%
+                steps = 17,
+                colors = SliderDefaults.colors(
+                    thumbColor = HyperBlue,
+                    activeTrackColor = HyperBlue,
+                    inactiveTrackColor = HyperFill
+                )
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("60%", style = MaterialTheme.typography.labelMedium, color = HyperTextSecondary)
+                Text("默认 100%", style = MaterialTheme.typography.labelMedium, color = HyperTextSecondary)
+                Text("240%", style = MaterialTheme.typography.labelMedium, color = HyperTextSecondary)
+            }
+        }
+    }
+}
